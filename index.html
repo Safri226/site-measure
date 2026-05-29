@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Site Measurement Tool with Auto-Scale Preview</title>
+    <title>Site Measurement Tool with AutoCAD Export</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Prevents accidental browser double-tap zooming on mobile screens */
+        /* Prevents accidental browser double-tap zooming on responsive touchscreen buttons */
         button { touch-action: manipulation; }
-        /* Defensively locks down the body container from rolling/scrolling when keyboard slides open */
+        /* Defensively locks down the body container from scrolling when the numeric keypad slides up */
         body { overflow: hidden; position: fixed; width: 100%; height: 100%; }
     </style>
 </head>
@@ -17,7 +17,7 @@
     <div class="max-w-md w-full h-full mx-auto bg-slate-800 rounded-2xl shadow-xl p-3 border border-slate-700 flex flex-col justify-between overflow-hidden">
         
         <header class="text-center pb-1 border-b border-slate-700 flex-shrink-0">
-            <h1 class="text-lg font-black tracking-tight text-emerald-400">📐 SITE LAYOUT VISUALIZER</h1>
+            <h1 class="text-lg font-black tracking-tight text-emerald-400">📐 SITE TO CAD VISUALIZER</h1>
         </header>
 
         <div class="bg-slate-950 rounded-xl p-1 border border-slate-800 relative flex-grow min-h-0 my-2 flex flex-col justify-center items-center">
@@ -66,7 +66,7 @@
             <div class="pt-1 flex gap-2">
                 <button onclick="undoLastVector()" class="bg-amber-600 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase shadow">↩ Undo</button>
                 <button onclick="clearPipeline()" class="bg-red-600 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase shadow">🗑️ Reset</button>
-                <button onclick="copyToClipboard()" class="flex-grow bg-emerald-500 text-slate-950 font-black py-2 rounded-xl text-xs uppercase tracking-wider shadow">📋 Copy Script</button>
+                <button onclick="copyToClipboard()" class="flex-grow bg-emerald-500 text-slate-950 font-black py-2 rounded-xl text-xs uppercase tracking-wider shadow">📋 Copy AutoCAD Macro</button>
             </div>
         </div>
     </div>
@@ -78,13 +78,13 @@
         const ctx = canvas.getContext('2d');
 
         function resizeCanvas() {
-            // Recompute the physical boundaries of the canvas window context to clear buffer skewing
+            // Recalculates canvas boundaries instantly to clear screen rendering distortion
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
             drawShape();
         }
 
-        // Monitors display dimensions dynamically when soft keyboards alter visible browser real estate
+        // Monitors viewport updates when virtual keypads compress responsive space bounds
         const ro = new ResizeObserver(() => resizeCanvas());
         ro.observe(canvas.parentElement);
 
@@ -105,22 +105,20 @@
                 bOuter.className = "py-2 text-center rounded-xl font-bold text-xs bg-slate-700 text-slate-300";
                 bHole.className = "py-2 text-center rounded-xl font-bold text-xs bg-red-600 text-white shadow-lg";
             }
-            if (navigator.vibrate) navigator.vibrate(20); // Very light click for toggle
+            if (navigator.vibrate) navigator.vibrate(20);
         }
 
         function processNextStep() {
             const inputField = document.getElementById('lengthInput');
             const val = parseFloat(inputField.value);
             if (isNaN(val) || val <= 0) {
-                // Double pulse vibration alert signaling value initialization error
                 if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                 alert('🚨 Enter a valid measurement length first!');
                 return;
             }
-            // Standard confirmation vibration pulse acknowledgment
             if (navigator.vibrate) navigator.vibrate(30);
             
-            // Drop browser focus to cleanly minimize the soft numpad out of visual path
+            // Soft-dismiss the keyboard so the worker can explicitly evaluate the compass directions
             inputField.blur();
         }
 
@@ -134,7 +132,6 @@
                 return;
             }
 
-            // Short, clean haptic confirmation pulse for logging a successful line node
             if (navigator.vibrate) navigator.vibrate(45);
 
             pipeline.push({ mode: currentMode, length: val, angle: angle });
@@ -144,7 +141,6 @@
 
         function undoLastVector() {
             if(pipeline.length > 0) { 
-                // Distinct longer single buzz signaling clear deletion
                 if (navigator.vibrate) navigator.vibrate(70);
                 pipeline.pop(); 
                 drawShape(); 
@@ -159,7 +155,7 @@
             }
         }
 
-        // Converts angles directly to cartesian matrix positions to mirror desktop trig mapping
+        // Transforms polar angles directly to Cartesian nodes for the live preview matching standard math matrix mapping
         function generateCoordinates() {
             let points = { Outer: [{x: 0, y: 0}], Hole: [] };
             let ox = 0, oy = 0; let hx = null, hy = null;
@@ -174,7 +170,7 @@
                     points.Outer.push({x: ox, y: oy});
                 } else {
                     if (hx === null) { 
-                        // Visual placeholder offset so the inner hole loop maps inside drawing area bounds natively
+                        // Visual offset baseline positioning so holes initially render cleanly inside bounding constraints
                         hx = points.Outer[0].x + (ox * 0.2); 
                         hy = points.Outer[0].y + (oy * 0.2);
                         points.Hole.push({x: hx, y: hy});
@@ -220,27 +216,45 @@
 
                 points.forEach((p, idx) => {
                     ctx.beginPath();
-                    // Marks the most recent tracked point node as amber to show layout head direction
                     ctx.fillStyle = idx === points.length - 1 ? "#f59e0b" : "#ffffff";
                     ctx.arc(p.x * scale + cx, canvas.height - (p.y * scale + cy), idx === points.length - 1 ? 4.5 : 2.5, 0, 2 * Math.PI);
                     ctx.fill();
                 });
             }
 
-            drawLoop(coordinateSets.Outer, "#3b82f6"); // Outer perimeter drawn in blue
-            drawLoop(coordinateSets.Hole, "#ef4444");  // Cuts / holes drawn in red
+            drawLoop(coordinateSets.Outer, "#3b82f6"); 
+            drawLoop(coordinateSets.Hole, "#ef4444");  
         }
 
-        // Aggregates array pipeline into batch script format matching desktop text parser specs
+        // Compiles data directly into direct, relative AutoCAD command string injection macros
         function compileOutputText() {
-            let outerLines = []; let holeLines = [];
-            pipeline.forEach(v => {
-                if(v.mode === 'Outer') outerLines.push(`${v.length}, ${v.angle}`);
-                else holeLines.push(`${v.length}, ${v.angle}`);
-            });
+            if (pipeline.length === 0) return "";
+
             let out = "";
-            if (outerLines.length > 0) out += outerLines.join('\n') + '\nclose\n';
-            if (holeLines.length > 0) out += "\n# HOLE GEOMETRY CONSOLE OVERWRITE\n" + holeLines.join('\n') + '\nclose';
+            
+            // 1. Process Outer Profile Perimeter Line
+            let outerVectors = pipeline.filter(v => v.mode === 'Outer');
+            if (outerVectors.length > 0) {
+                out += "_PLINE\n"; // Calls native AutoCAD polyline parameters
+                outerVectors.forEach(v => {
+                    // Normalize standard compass angle to AutoCAD polar angular coordinates map
+                    let acadAngle = (90 - v.angle + 360) % 360;
+                    out += `@${v.length}<${acadAngle}\n`;
+                });
+                out += "C\n\n"; // Closes perimeter layout cleanly
+            }
+
+            // 2. Process Sink Void Openings
+            let holeVectors = pipeline.filter(v => v.mode === 'Hole');
+            if (holeVectors.length > 0) {
+                out += "_PLINE\n"; 
+                holeVectors.forEach(v => {
+                    let acadAngle = (90 - v.angle + 360) % 360;
+                    out += `@${v.length}<${acadAngle}\n`;
+                });
+                out += "C\n";
+            }
+
             return out.trim();
         }
 
@@ -249,7 +263,7 @@
             if(!txt) { alert("No vectors recorded to copy!"); return; }
             navigator.clipboard.writeText(txt).then(() => {
                 if (navigator.vibrate) navigator.vibrate([40, 40]);
-                alert('🚀 Script copied! Send it directly via chat to your drafting desk.');
+                alert('🚀 AutoCAD Script Copied!\nPaste directly into the AutoCAD Command bar after launching a polyline point.');
             });
         }
     </script>
