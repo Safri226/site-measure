@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Site Measurement Tool with Storage & AutoCAD Export</title>
+    <title>Site Measurement Tool with Storage & Raw Output</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Prevents accidental browser double-tap zooming on responsive touchscreen buttons */
@@ -17,7 +17,7 @@
     <div class="max-w-md w-full h-full mx-auto bg-slate-800 rounded-2xl shadow-xl p-3 border border-slate-700 flex flex-col justify-between overflow-hidden">
         
         <header class="text-center pb-1 border-b border-slate-700 flex-shrink-0">
-            <h1 class="text-lg font-black tracking-tight text-emerald-400">📐 SITE TO CAD VISUALIZER</h1>
+            <h1 class="text-lg font-black tracking-tight text-emerald-400">📐 SITE LAYOUT VISUALIZER</h1>
         </header>
 
         <div class="bg-slate-950 rounded-xl p-1 border border-slate-800 relative flex-grow min-h-0 my-1.5 flex flex-col justify-center items-center">
@@ -79,7 +79,7 @@
             <div class="pt-1 flex gap-2">
                 <button onclick="undoLastVector()" class="bg-amber-600 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase shadow">↩ Undo</button>
                 <button onclick="clearPipeline()" class="bg-red-600 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase shadow">🗑️ Reset</button>
-                <button onclick="copyToClipboard()" class="flex-grow bg-emerald-500 text-slate-950 font-black py-2 rounded-xl text-xs uppercase tracking-wider shadow">📋 Copy AutoCAD Macro</button>
+                <button onclick="copyToClipboard()" class="flex-grow bg-emerald-500 text-slate-950 font-black py-2 rounded-xl text-xs uppercase tracking-wider shadow">📋 Copy Script</button>
             </div>
         </div>
     </div>
@@ -173,7 +173,7 @@
             }
         }
 
-        // --- NEW STORAGE OPERATIONS ---
+        // Storage Operations
         function saveToStorage() {
             const jobName = document.getElementById('jobNameInput').value.trim();
             if (!jobName) {
@@ -186,7 +186,6 @@
                 return;
             }
 
-            // Save under a unique key based on the job name
             const storageKey = `job_${jobName.toLowerCase().replace(/\s+/g, '_')}`;
             const dataPayload = { jobName: jobName, pipeline: pipeline };
             localStorage.setItem(storageKey, JSON.stringify(dataPayload));
@@ -303,30 +302,16 @@
             drawLoop(coordinateSets.Hole, "#ef4444");  
         }
 
+        // Restored back to your original format compatible with area.py
         function compileOutputText() {
-            if (pipeline.length === 0) return "";
-
+            let outerLines = []; let holeLines = [];
+            pipeline.forEach(v => {
+                if(v.mode === 'Outer') outerLines.push(`${v.length}, ${v.angle}`);
+                else holeLines.push(`${v.length}, ${v.angle}`);
+            });
             let out = "";
-            let outerVectors = pipeline.filter(v => v.mode === 'Outer');
-            if (outerVectors.length > 0) {
-                out += "_PLINE\n"; 
-                outerVectors.forEach(v => {
-                    let acadAngle = (90 - v.angle + 360) % 360;
-                    out += `@${v.length}<${acadAngle}\n`;
-                });
-                out += "C\n\n"; 
-            }
-
-            let holeVectors = pipeline.filter(v => v.mode === 'Hole');
-            if (holeVectors.length > 0) {
-                out += "_PLINE\n"; 
-                holeVectors.forEach(v => {
-                    let acadAngle = (90 - v.angle + 360) % 360;
-                    out += `@${v.length}<${acadAngle}\n`;
-                });
-                out += "C\n";
-            }
-
+            if (outerLines.length > 0) out += outerLines.join('\n') + '\nclose\n';
+            if (holeLines.length > 0) out += "\n# HOLE GEOMETRY CONSOLE OVERWRITE\n" + holeLines.join('\n') + '\nclose';
             return out.trim();
         }
 
@@ -335,7 +320,7 @@
             if(!txt) { alert("No vectors recorded to copy!"); return; }
             navigator.clipboard.writeText(txt).then(() => {
                 if (navigator.vibrate) navigator.vibrate([40, 40]);
-                alert('🚀 AutoCAD Script Copied!\nPaste directly into the AutoCAD Command bar after launching a polyline point.');
+                alert('🚀 Script copied! Send it directly via chat to your desktop parser.');
             });
         }
     </script>
