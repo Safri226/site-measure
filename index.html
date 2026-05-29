@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Site Measurement Tool with Auto-Scale Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        button { touch-action: manipulation; }
+        /* Prevent body scrolling entirely so the keyboard doesn't push elements out of view */
+        body { overflow: hidden; position: fixed; width: 100%; height: 100%; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-[100dvh] w-full p-2 flex flex-col justify-between select-none">
+
+    <div class="max-w-md w-full h-full mx-auto bg-slate-800 rounded-2xl shadow-xl p-3 border border-slate-700 flex flex-col justify-between overflow-hidden">
+        
+        <header class="text-center pb-1 border-b border-slate-700 flex-shrink-0">
+            <h1 class="text-lg font-black tracking-tight text-emerald-400">📐 SITE LAYOUT VISUALIZER</h1>
+        </header>
+
+        <div class="bg-slate-950 rounded-xl p-1 border border-slate-800 relative flex-grow min-h-0 my-2 flex flex-col justify-center items-center">
+            <span class="absolute top-1 left-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-900 px-1 py-0.5 rounded border border-slate-800 z-10">Live Preview</span>
+            <canvas id="shapeCanvas" class="w-full h-full bg-slate-900 rounded-lg border border-slate-800"></canvas>
+        </div>
+
+        <div class="space-y-2 flex-shrink-0">
+            <div class="grid grid-cols-2 gap-2">
+                <button id="btnOuter" class="py-2 text-center rounded-xl font-bold text-xs bg-blue-600 text-white shadow-lg transition-all" onclick="setMode('Outer')">🟩 Outer Shape</button>
+                <button id="btnHole" class="py-2 text-center rounded-xl font-bold text-xs bg-slate-700 text-slate-300 transition-all" onclick="setMode('Hole')">🕳️ Sink Cutout</button>
+            </div>
+
+            <div class="bg-slate-950 p-2 rounded-xl border border-slate-800">
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Enter Tape Measure Length:</label>
+                <div class="flex gap-2">
+                    <input type="number" id="lengthInput" inputmode="decimal" 
+                           class="flex-grow bg-slate-900 text-slate-100 text-2xl font-bold p-1 text-center rounded-xl border border-slate-700 focus:outline-none focus:border-emerald-500 placeholder-slate-800" 
+                           placeholder="0.00"
+                           onkeydown="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('btnNext').click(); }">
+                    
+                    <button id="btnNext" onclick="processNextStep()" 
+                            class="bg-blue-600 active:bg-blue-500 text-white font-black px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center">
+                        Next ➡️
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1.5">
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(315)">↖ 315°</button>
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(0)">↑ 0°</button>
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(45)">↗ 45°</button>
+                
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(270)">← 270°</button>
+                <div id="modeIndicator" class="flex items-center justify-center font-black text-[11px] uppercase tracking-wider text-blue-400 border border-slate-700 rounded-xl bg-slate-900 text-center p-1">
+                    <span id="currentModeLabel">Outer</span>
+                </div>
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(90)">→ 90°</button>
+                
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(225)">↙ 225°</button>
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(180)">↓ 180°</button>
+                <button class="bg-slate-700 active:bg-emerald-500 text-white font-bold py-2 rounded-xl text-sm" onclick="logVector(135)">↘ 135°</button>
+            </div>
+
+            <div class="pt-1 flex gap-2">
+                <button onclick="undoLastVector()" class="bg-amber-600 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase">↩ Undo</button>
+                <button onclick="clearPipeline()" class="bg-red-600 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase">🗑️ Reset</button>
+                <button onclick="copyToClipboard()" class="flex-grow bg-emerald-500 text-slate-950 font-black py-2 rounded-xl text-xs uppercase tracking-wider">📋 Copy Script</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pipeline = [];
+        let currentMode = 'Outer';
+        const canvas = document.getElementById('shapeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            // Read container dimensions instantly
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            drawShape();
+        }
+
+        // Use ResizeObserver to auto-recompute dimensions when the keyboard squeezes the viewport
+        const ro = new ResizeObserver(() => resizeCanvas());
+        ro.observe(canvas.parentElement);
+
+        function setMode(mode) {
+            currentMode = mode;
+            const label = document.getElementById('currentModeLabel');
+            const bOuter = document.getElementById('btnOuter');
+            const bHole = document.getElementById('btnHole');
+
+            if(mode === 'Outer') {
+                label.innerText = 'Outer';
+                label.className = "text-xs font-bold text-blue-400";
+                bOuter.className = "py-2 text-center rounded-xl font-bold text-xs bg-blue-600 text-white shadow-lg";
+                bHole.className = "py-2 text-center rounded-xl font-bold text-xs bg-slate-700 text-slate-300";
+            } else {
+                label.innerText = 'Sink Hole';
+                label.className = "text-xs font-bold text-red-400";
+                bOuter.className = "py-2 text-center rounded-xl font-bold text-xs bg-slate-700 text-slate-300";
+                bHole.className = "py-2 text-center rounded-xl font-bold text-xs bg-red-600 text-white shadow-lg";
+            }
+        }
+
+        function processNextStep() {
+            const inputField = document.getElementById('lengthInput');
+            const val = parseFloat(inputField.value);
+            if (isNaN(val) || val <= 0) {
+                alert('🚨 Enter a valid measurement length first!');
+                return;
+            }
+            // Dismiss keyboard smoothly so the site worker can clearly see the compass grid
+            inputField.blur();
+        }
+
+        function logVector(angle) {
+            const inputField = document.getElementById('lengthInput');
+            const val = parseFloat(inputField.value);
+            
+            if (isNaN(val) || val <= 0) {
+                alert('🚨 Please enter or confirm your measurement length first!');
+                return;
+            }
+
+            pipeline.push({ mode: currentMode, length: val, angle: angle });
+            inputField.value = ''; 
+            drawShape();
+        }
+
+        function undoLastVector() {
+            if(pipeline.length > 0) { pipeline.pop(); drawShape(); }
+        }
+
+        function clearPipeline() {
+            if(confirm("Flush all layout vectors?")) { pipeline = []; drawShape(); }
+        }
+
+        function generateCoordinates() {
+            let points = { Outer: [{x: 0, y: 0}], Hole: [] };
+            let ox = 0, oy = 0; let hx = null, hy = null;
+
+            pipeline.forEach((v) => {
+                let rad = ((90 - v.angle) * Math.PI) / 180;
+                let dx = v.length * Math.cos(rad);
+                let dy = v.length * Math.sin(rad);
+
+                if (v.mode === 'Outer') {
+                    ox += dx; oy += dy;
+                    points.Outer.push({x: ox, y: oy});
+                } else {
+                    if (hx === null) { 
+                        hx = points.Outer[0].x + 200; hy = points.Outer[0].y + 200;
+                        points.Hole.push({x: hx, y: hy});
+                    }
+                    hx += dx; hy += dy;
+                    points.Hole.push({x: hx, y: hy});
+                }
+            });
+            return points;
+        }
+
+        function drawShape() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (pipeline.length === 0) return;
+
+            const coordinateSets = generateCoordinates();
+            let allPts = [...coordinateSets.Outer, ...coordinateSets.Hole];
+            let minX = Math.min(...allPts.map(p => p.x));
+            let maxX = Math.max(...allPts.map(p => p.x));
+            let minY = Math.min(...allPts.map(p => p.y));
+            let maxY = Math.max(...allPts.map(p => p.y));
+
+            let shapeW = maxX - minX; let shapeH = maxY - minY;
+            let scaleX = (canvas.width - 20) / (shapeW || 1);
+            let scaleY = (canvas.height - 20) / (shapeH || 1);
+            let scale = Math.min(scaleX, scaleY);
+
+            let cx = (canvas.width - shapeW * scale) / 2 - minX * scale;
+            let cy = (canvas.height - shapeH * scale) / 2 - minY * scale;
+
+            function drawLoop(points, color) {
+                if (points.length === 0) return;
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+                ctx.moveTo(points[0].x * scale + cx, canvas.height - (points[0].y * scale + cy));
+                for(let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x * scale + cx, canvas.height - (points[i].y * scale + cy));
+                }
+                ctx.stroke();
+
+                points.forEach((p, idx) => {
+                    ctx.beginPath();
+                    ctx.fillStyle = idx === points.length - 1 ? "#f59e0b" : "#ffffff";
+                    ctx.arc(p.x * scale + cx, canvas.height - (p.y * scale + cy), idx === points.length - 1 ? 4 : 2.5, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+
+            drawLoop(coordinateSets.Outer, "#3b82f6");
+            drawLoop(coordinateSets.Hole, "#ef4444");
+        }
+
+        function compileOutputText() {
+            let outerLines = []; let holeLines = [];
+            pipeline.forEach(v => {
+                if(v.mode === 'Outer') outerLines.push(`${v.length}, ${v.angle}`);
+                else holeLines.push(`${v.length}, ${v.angle}`);
+            });
+            let out = "";
+            if (outerLines.length > 0) out += outerLines.join('\n') + '\nclose\n';
+            if (holeLines.length > 0) out += "\n# HOLE GEOMETRY CONSOLE OVERWRITE\n" + holeLines.join('\n') + '\nclose';
+            return out.trim();
+        }
+
+        function copyToClipboard() {
+            const txt = compileOutputText();
+            if(!txt) return;
+            navigator.clipboard.writeText(txt).then(() => {
+                alert('🚀 Script copied! Send it to drafting via chat.');
+            });
+        }
+    </script>
+</body>
+</html>
